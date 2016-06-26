@@ -143,20 +143,23 @@ loop:
 	}
 }
 
+// 由于这个struct并非线程安全，所以上面只有一个start函数使用它,最终运行在PubSub.New{goroutine}中
 // registry maintains the current subscription state. It's not
 // safe to access a registry from multiple goroutines simultaneously.
 type registry struct {
-	topics    map[string]map[chan interface{}]bool
-	revTopics map[chan interface{}]map[string]bool
+	topics    map[string]map[chan interface{}]bool // 根据topic名字获取{channel， bool}数组，发送完毕后如果bool为true，则删除这个channel
+	revTopics map[chan interface{}]map[string]bool // 根据channel获取topic map,一个接收者可能订阅很多topic，这些topic的消息都会被塞进同一个channel中
 }
 
 func (reg *registry) add(topic string, ch chan interface{}, once bool) {
 	if reg.topics[topic] == nil {
+		// topic map下面的channel map代表了所有的订阅者，每个订阅者使用一个channel
 		reg.topics[topic] = make(map[chan interface{}]bool)
 	}
 	reg.topics[topic][ch] = once
 
 	if reg.revTopics[ch] == nil {
+		// channel map下的topic map代表了订阅者订阅的所有topic
 		reg.revTopics[ch] = make(map[string]bool)
 	}
 	reg.revTopics[ch][topic] = true
